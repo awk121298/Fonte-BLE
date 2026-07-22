@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Fonte de Bancada</title>
+<style>
+  :root{
+    --bg:#0d0f12;
+    --panel:#15191f;
+    --line:#242c36;
+    --led:#31d17a;      /* verde "energizado" */
+    --led-dim:#1a5c39;
+    --amber:#f0a500;    /* âmbar de painel de bancada */
+    --text:#e7ecf1;
+    --muted:#6f7d8c;
+    --danger:#e5484d;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:"DM Mono",ui-monospace,"SF Mono",Menlo,monospace;
+    display:flex;flex-direction:column;
+    padding:20px 18px calc(20px + env(safe-area-inset-bottom));
+    gap:18px;-webkit-tap-highlight-color:transparent;
+  }
+  header{display:flex;align-items:center;justify-content:space-between}
+  .brand{font-size:13px;letter-spacing:.18em;color:var(--muted);text-transform:uppercase}
+  .brand b{color:var(--text);font-weight:600}
+  .dot{width:9px;height:9px;border-radius:50%;background:var(--led-dim);
+       box-shadow:0 0 0 0 rgba(49,209,122,0);transition:.3s}
+  .dot.on{background:var(--led);box-shadow:0 0 10px 1px rgba(49,209,122,.7)}
+
+  /* Mostrador grande, estilo painel */
+  .readout{
+    background:var(--panel);border:1px solid var(--line);border-radius:16px;
+    padding:26px 22px 20px;position:relative;overflow:hidden;
+  }
+  .readout::before{content:"TENSÃO ALVO";position:absolute;top:14px;left:20px;
+    font-size:10px;letter-spacing:.22em;color:var(--muted)}
+  .value{font-size:clamp(56px,22vw,88px);font-weight:600;line-height:1;
+    color:var(--amber);letter-spacing:-.02em;margin-top:20px;
+    font-variant-numeric:tabular-nums}
+  .value small{font-size:.34em;color:var(--muted);margin-left:.15em;letter-spacing:0}
+
+  /* Slider */
+  .slider-wrap{padding:6px 2px}
+  input[type=range]{
+    -webkit-appearance:none;width:100%;height:44px;background:transparent}
+  input[type=range]::-webkit-slider-runnable-track{
+    height:8px;border-radius:6px;
+    background:linear-gradient(90deg,var(--led),var(--amber));border:1px solid var(--line)}
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none;width:30px;height:30px;border-radius:50%;
+    background:var(--text);border:4px solid var(--bg);margin-top:-12px;
+    box-shadow:0 2px 8px rgba(0,0,0,.5)}
+  input[type=range]:disabled::-webkit-slider-runnable-track{opacity:.35}
+  .scale{display:flex;justify-content:space-between;font-size:11px;color:var(--muted)}
+
+  /* Presets rápidos */
+  .presets{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+  .preset{background:var(--panel);border:1px solid var(--line);color:var(--text);
+    padding:12px 0;border-radius:10px;font-family:inherit;font-size:15px;cursor:pointer}
+  .preset:active:not(:disabled){border-color:var(--amber);color:var(--amber)}
+  .preset:disabled{opacity:.4}
+
+  .spacer{flex:1}
+
+  .manual{display:flex;gap:8px}
+  .manual input{flex:1;min-width:0;background:var(--panel);border:1px solid var(--line);
+    color:var(--text);font-family:inherit;font-size:15px;padding:12px;border-radius:10px}
+  .manual input:focus{outline:none;border-color:var(--amber)}
+  .m-btn{background:var(--panel);border:1px solid var(--line);color:var(--text);
+    font-family:inherit;font-size:15px;padding:12px 18px;border-radius:10px;cursor:pointer}
+  .m-btn:active:not(:disabled){border-color:var(--amber);color:var(--amber)}
+  .m-btn:disabled{opacity:.4}
+
+  .afer{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    padding:14px;display:flex;flex-direction:column;gap:10px}
+  .afer-h{font-size:10px;letter-spacing:.22em;color:var(--muted)}
+  .afer-row{display:flex;align-items:center;gap:8px}
+  .afer-lbl{font-size:11px;color:var(--muted)}
+  .afer-val{font-size:15px;color:var(--amber);min-width:52px;
+    font-variant-numeric:tabular-nums}
+  .afer input{flex:1;min-width:0;background:var(--bg);border:1px solid var(--line);
+    color:var(--text);font-family:inherit;font-size:15px;padding:8px;border-radius:8px}
+  .afer-btn{background:var(--led);color:#06130c;border:none;border-radius:8px;
+    width:38px;height:36px;font-size:19px;font-family:inherit;cursor:pointer}
+  .afer-btn:disabled{background:var(--led-dim);opacity:.5}
+  .afer-list{font-size:12px;color:var(--muted);line-height:1.7}
+  .afer-list span{color:var(--danger)}
+  .afer-out{font-size:12px;color:var(--text);line-height:1.6;
+    font-family:inherit;word-break:break-all}
+  .afer-out b{color:var(--led);font-weight:600}
+
+  button.primary{
+    width:100%;padding:16px;border-radius:12px;border:none;cursor:pointer;
+    font-family:inherit;font-size:15px;letter-spacing:.04em;font-weight:600;
+    background:var(--led);color:#06130c}
+  button.primary:disabled{background:var(--led-dim);color:#0a1a10;opacity:.7}
+  .status{text-align:center;font-size:12px;color:var(--muted);min-height:16px}
+  .status.err{color:var(--danger)}
+</style>
+</head>
+<body>
+  <header>
+    <div class="brand"><b>FONTE</b> de bancada</div>
+    <div class="dot" id="dot"></div>
+  </header>
+
+  <div class="readout">
+    <div class="value"><span id="val">3.90</span><small>V</small></div>
+  </div>
+
+  <div class="slider-wrap">
+    <input type="range" id="slider" min="3.9" max="22.3" step="0.01" value="3.9" disabled>
+    <div class="scale"><span>3,9 V</span><span>22,3 V</span></div>
+  </div>
+
+  <div class="presets">
+    <button class="preset" data-v="5">5,0</button>
+    <button class="preset" data-v="9">9,0</button>
+    <button class="preset" data-v="12">12</button>
+    <button class="preset" data-v="15">15</button>
+    <button class="preset" data-v="18">18</button>
+    <button class="preset" data-v="19">19</button>
+    <button class="preset" data-v="20">20</button>
+    <button class="preset" data-v="22">22</button>
+  </div>
+
+  <div class="manual">
+    <input type="number" id="m-val" step="0.01" min="3.9" max="22.3"
+           placeholder="Digite a tensão" inputmode="decimal">
+    <button class="m-btn" id="m-go" disabled>Aplicar</button>
+  </div>
+
+  <div class="spacer"></div>
+
+  <div class="afer" id="afer">
+    <div class="afer-h">Aferição</div>
+    <div class="afer-row">
+      <span class="afer-lbl">Pedido</span>
+      <span class="afer-val" id="a-set">—</span>
+      <span class="afer-lbl">Medido</span>
+      <input type="number" id="a-med" step="0.01" placeholder="0.00" inputmode="decimal">
+      <button class="afer-btn" id="a-add">+</button>
+    </div>
+    <div class="afer-list" id="a-list"></div>
+    <div class="afer-out" id="a-out"></div>
+  </div>
+
+  <div class="status" id="status">Desconectado</div>
+  <button class="primary" id="btn">Conectar à fonte</button>
+
+<script>
+const SERVICE_UUID = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
+const CHAR_VSET    = "6e400002-b5a3-f393-e0a9-e50e24dcca9e";
+const CHAR_STATE   = "6e400003-b5a3-f393-e0a9-e50e24dcca9e";
+
+const $ = id => document.getElementById(id);
+let charVset = null, charState = null, device = null;
+
+function setConnected(on){
+  $("dot").classList.toggle("on", on);
+  $("slider").disabled = !on;
+  $("m-go").disabled = !on;
+  $("m-val").disabled = !on;
+  document.querySelectorAll(".preset").forEach(b=> b.disabled = !on);
+  $("btn").textContent = on ? "Desconectar" : "Conectar à fonte";
+  $("status").classList.remove("err");
+  $("status").textContent = on ? "Conectado" : "Desconectado";
+  renderAfer();
+}
+
+function showValue(v){ $("val").textContent = v.toFixed(2); }
+
+// Recebido do ESP32 (encoder mexeu): move o slider SEM reenviar
+function applyRemote(v){
+  $("slider").value = v;
+  showValue(v);
+  renderAfer();
+}
+
+// Envia a tensão como string, ex "12.5"
+let sendTimer = null;
+async function sendVoltage(v){
+  if(!charVset) return;
+  // throttle: no máximo ~1 escrita a cada 60ms enquanto arrasta
+  if(sendTimer) return;
+  sendTimer = setTimeout(()=>{ sendTimer=null; }, 60);
+  try{
+    await charVset.writeValue(new TextEncoder().encode(v.toFixed(2)));
+  }catch(e){
+    $("status").textContent = "Falha ao enviar";
+    $("status").classList.add("err");
+  }
+}
+
+$("slider").addEventListener("input", e=>{
+  const v = parseFloat(e.target.value);
+  showValue(v);
+  sendVoltage(v);
+});
+
+document.querySelectorAll(".preset").forEach(b=>{
+  b.addEventListener("click", ()=>{
+    const v = parseFloat(b.dataset.v);
+    $("slider").value = v; showValue(v); sendVoltage(v); renderAfer();
+  });
+});
+
+// ---- Entrada manual de tensão ----
+const V_LO = 3.9, V_HI = 22.3;
+
+function aplicarManual(){
+  const raw = $("m-val").value.replace(",", ".");
+  const v = parseFloat(raw);
+  if(isNaN(v)){
+    $("status").textContent = "Digite um número";
+    $("status").classList.add("err");
+    return;
+  }
+  if(v < V_LO || v > V_HI){
+    $("status").textContent = `Fora da faixa (${V_LO}–${V_HI} V)`;
+    $("status").classList.add("err");
+    return;
+  }
+  $("slider").value = v;
+  showValue(v);
+  sendVoltage(v);
+  renderAfer();
+  $("m-val").value = "";
+  $("status").classList.remove("err");
+  $("status").textContent = "Conectado";
+}
+
+$("m-go").addEventListener("click", aplicarManual);
+$("m-val").addEventListener("keydown", e=>{
+  if(e.key === "Enter") aplicarManual();
+});
+
+// ---- Aferição: coleta pares (pedido, medido) e recalcula a reta ----
+// Constantes ATUAIS gravadas no firmware — mantenha em sincronia.
+const CAL_A = -217.303, CAL_B = 4897.451;
+let pares = [];
+
+function dacDe(v){ return CAL_A * v + CAL_B; }   // o que o firmware manda hoje
+
+function renderAfer(){
+  $("a-set").textContent = charVset ? parseFloat($("slider").value).toFixed(2) : "—";
+  $("a-add").disabled = !charVset;
+
+  $("a-list").innerHTML = pares.map((p,i)=>{
+    const d = p.med - p.set;
+    const sinal = d >= 0 ? "+" : "";
+    return `${p.set.toFixed(2)} V → ${p.med.toFixed(2)} V `
+         + `<span>(${sinal}${d.toFixed(2)})</span> `
+         + `<a href="#" onclick="rmPar(${i});return false" style="color:var(--muted)">✕</a>`;
+  }).join("<br>");
+
+  if(pares.length < 2){
+    $("a-out").innerHTML = pares.length === 1
+      ? "Adicione mais um ponto (de preferência no outro extremo da faixa)."
+      : "";
+    return;
+  }
+
+  // Cada par: a tensão REAL medida corresponde ao código DAC que foi enviado.
+  // Refazemos a reta dac = A*Vreal + B usando esses pontos verdadeiros.
+  const pts = pares.map(p => ({ x: p.med, y: dacDe(p.set) }));
+  const n = pts.length;
+  const sx = pts.reduce((s,p)=>s+p.x,0), sy = pts.reduce((s,p)=>s+p.y,0);
+  const sxy = pts.reduce((s,p)=>s+p.x*p.y,0), sxx = pts.reduce((s,p)=>s+p.x*p.x,0);
+  const den = n*sxx - sx*sx;
+  if(Math.abs(den) < 1e-9){
+    $("a-out").innerHTML = "Pontos muito próximos — meça em tensões bem diferentes.";
+    return;
+  }
+  const A = (n*sxy - sx*sy)/den;
+  const B = (sy - A*sx)/n;
+
+  $("a-out").innerHTML =
+      `<b>const float CAL_A = ${A.toFixed(3)}f;</b><br>`
+    + `<b>const float CAL_B = ${B.toFixed(3)}f;</b><br>`
+    + `Grave no fonte_ble.ino (${n} pontos).`;
+}
+
+function rmPar(i){ pares.splice(i,1); renderAfer(); }
+
+$("a-add").addEventListener("click", ()=>{
+  const med = parseFloat($("a-med").value);
+  const set = parseFloat($("slider").value);
+  if(isNaN(med) || med <= 0) return;
+  pares.push({ set, med });
+  pares.sort((a,b)=>a.set-b.set);
+  $("a-med").value = "";
+  renderAfer();
+});
+
+$("slider").addEventListener("input", renderAfer);
+
+$("btn").addEventListener("click", async ()=>{
+  if(device && device.gatt.connected){ device.gatt.disconnect(); return; }
+  if(!navigator.bluetooth){
+    $("status").textContent = "Use o Chrome no Android";
+    $("status").classList.add("err"); return;
+  }
+  try{
+    $("status").textContent = "Procurando...";
+    device = await navigator.bluetooth.requestDevice({
+      filters:[{services:[SERVICE_UUID]}]
+    });
+    device.addEventListener("gattserverdisconnected", ()=>{
+      charVset=null; setConnected(false);
+    });
+    const server  = await device.gatt.connect();
+    const service = await server.getPrimaryService(SERVICE_UUID);
+    charVset      = await service.getCharacteristic(CHAR_VSET);
+
+    // Escuta a tensão que o ESP32 publica (encoder ou confirmação)
+    charState = await service.getCharacteristic(CHAR_STATE);
+    await charState.startNotifications();
+    charState.addEventListener("characteristicvaluechanged", e=>{
+      const txt = new TextDecoder().decode(e.target.value).trim();
+      const v = parseFloat(txt);
+      if(!isNaN(v)) applyRemote(v);
+    });
+
+    setConnected(true);
+    // sincroniza a fonte com o valor atual do slider
+    sendVoltage(parseFloat($("slider").value));
+  }catch(e){
+    $("status").textContent = "Conexão cancelada";
+    $("status").classList.add("err");
+  }
+});
+
+renderAfer();
+</script>
+</body>
+</html>
